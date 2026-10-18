@@ -60,7 +60,7 @@ function timeStop(person){
  try {
  const sheet=tab('Portal Test Time'),rows=sheet.getDataRange().getValues();
  for(let i=rows.length-1;i>=1;i--){const r=rows[i];if(r[1]===person&&!r[4]){
- const end=stamp(),start=new Date(String(r[3]).replace(' ','T')+'-04:00');
+ const end=stamp(),start=Utilities.parseDate(String(r[3]),ET,'yyyy-MM-dd HH:mm:ss');
  const min=Math.max(0,Math.round((new Date()-start)/60000*10)/10);
  sheet.getRange(i+1,5,1,2).setValues([[end,min]]);
  return {ok:true,state:current()};
@@ -91,7 +91,7 @@ if(type==='count')Object.assign(p,{product:e('countproduct').value,final:Number(
 invoke('submit',[type,p])}
 function startTimer(){invoke('timeStart',[{id:uuid(),person:person(),activity:e('activity').value}])}
 function stopTimer(){invoke('timeStop',[person()])}
-function draw(){if(!data)return;const h=data.home;e('slot').innerHTML=data.slots.map(s=>'<option value="'+s[0]+'">'+s[0]+' — '+s[1]+'</option>').join('');const ps=Object.keys(h);for(let id of ['deliveryproduct','countproduct']){let old=e(id).value;e(id).innerHTML=ps.map(p=>'<option>'+p+'</option>').join('');if(ps.includes(old))e(id).value=old}
+function draw(){if(!data)return;const h=data.home;const oldSlot=e('slot').value;e('slot').innerHTML=data.slots.map(s=>'<option value="'+s[0]+'">'+s[0]+' — '+s[1]+'</option>').join('');if(data.slots.some(s=>s[0]===oldSlot))e('slot').value=oldSlot;const ps=Object.keys(h);for(let id of ['deliveryproduct','countproduct']){let old=e(id).value;e(id).innerHTML=ps.map(p=>'<option>'+p+'</option>').join('');if(ps.includes(old))e(id).value=old}
 const slot=data.slots.find(s=>s[0]===e('slot').value);e('slotinfo').textContent=slot[1]+' • machine: '+data.machine[slot[0]]+' • home: '+h[slot[1]];
 e('countqty').value=h[e('countproduct').value];e('stock').innerHTML=ps.map(p=>'<tr><td>'+p+'</td><td>'+h[p]+'</td></tr>').join('');
 e('recent').textContent='';data.history.forEach(r=>{let p=document.createElement('p');p.textContent=r.date+' • '+r.type+' • '+r.desc;e('recent').appendChild(p)});

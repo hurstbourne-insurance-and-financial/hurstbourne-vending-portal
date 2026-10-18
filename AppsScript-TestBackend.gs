@@ -39,6 +39,8 @@ function submit(action,p){
   if(action==='restock'){
     const config=SLOTS.find(x=>x[0]===slot);if(!config||config[1]!==product)throw Error('Slot/product mismatch');
     if(n>s.home[product])throw Error('Not enough home inventory');
+    const recent=existing.filter(r=>r[3]==='restock'&&String(r[4])===slot&&String(r[5])===product&&Number(r[6])===n&&Number(r[7])===final).slice(-1)[0];
+    if(recent && (Date.now()-Utilities.parseDate(String(recent[1]),ET,'yyyy-MM-dd HH:mm:ss').getTime())<3*60000) throw Error('Identical restock recorded in the last 3 minutes. Check Recent records before resubmitting.');
   }
   sheet.appendRow([id,stamp(),person,action,slot,product,action==='count'?'':n,action==='delivery'?'':final,String(p.note||'').slice(0,500),String(p.clientAt||''),'TEST']);
   return {ok:true,state:current()};
@@ -68,6 +70,7 @@ function timeStop(person){
  throw Error('No active timer for '+person);
  }finally{lock.releaseLock()}
 }
+function resetTestData(){ const lock=LockService.getScriptLock();lock.waitLock(20000);try{ for(const name of ['Portal Test Events','Portal Test Time']){const sh=tab(name);if(sh.getLastRow()>1) sh.getRange(2,1,sh.getLastRow()-1,sh.getLastColumn()).clearContent();}return {ok:true,state:current()};}finally{lock.releaseLock()} }
 function page(){return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>
 body{font:16px system-ui;background:#f2f5f9;color:#172c44;margin:0}main{max-width:540px;margin:auto;padding:16px}header{background:#193657;color:white;padding:19px;border-radius:14px}h1{font-size:24px;margin:5px 0}.panel{background:white;border-radius:14px;padding:18px;margin:12px 0;box-shadow:0 1px 8px #0000000e}.warning{background:#fff0d0;padding:12px;border-radius:8px;margin-top:12px;font-size:13px}.tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin:14px 0}.tabs button{padding:11px 0;font-size:13px;background:#e3eaf2;color:#193657}.tabs button.sel{background:#193657;color:white}button{background:#193657;color:white;border:0;border-radius:9px;padding:13px;font-size:15px;font-weight:650;cursor:pointer}button.full{width:100%;margin-top:16px}input,select{width:100%;box-sizing:border-box;padding:12px;border:1px solid #ccd6e1;border-radius:9px;font-size:16px;margin:5px 0 11px}label{font-size:13px;font-weight:650;display:block}.hide{display:none}small,.muted{color:#637489}table{width:100%;border-collapse:collapse}td{padding:8px 0;border-bottom:1px solid #e4e9f0}td:last-child{text-align:right;font-weight:bold}#status{font-size:13px;padding:10px}button:disabled{opacity:.5}
 </style></head><body><main><header><small style="color:#adc5dd">HURSTBOURNE VENDING</small><h1>Tejas's Vending Portal</h1>TEST • Shared Google Sheets data</header><div class="warning">TEST ONLY. No live inventory updates. Use sample quantities; this test version is not a secure production system.</div>
@@ -77,11 +80,11 @@ body{font:16px system-ui;background:#f2f5f9;color:#172c44;margin:0}main{max-widt
 <section id="delivery" class="panel hide"><h2>Delivery received</h2><label>Product</label><select id="deliveryproduct"></select><label>Individual sellable units received</label><input id="received" type="number" value="24" min="1"><label>Notes</label><input id="dnote" placeholder="Order number (optional)"><button class="full" onclick="save('delivery')">Submit delivery</button></section>
 <section id="count" class="panel hide"><h2>Verify home stock</h2><label>Product</label><select id="countproduct" onchange="draw()"></select><label>Actual physical units at home</label><input id="countqty" type="number" min="0"><label>Correction notes</label><input id="cnote" placeholder="Optional"><button class="full" onclick="save('count')">Submit count</button></section>
 <section id="time" class="panel hide"><h2>Time logging</h2><label>Activity</label><select id="activity"><option>Preparing inventory</option><option>Travel</option><option>Restocking machine</option><option>Receiving delivery</option><option>Inventory counting</option><option>Other vending work</option></select><p id="timedesc"></p><button class="full" onclick="startTimer()">Start activity</button><button class="full" onclick="stopTimer()">Finish activity</button></section>
-<section class="panel"><h2>Home inventory — test</h2><table id="stock"></table></section><section class="panel"><h2>Recent test records</h2><div id="recent"></div><button class="full" onclick="refresh()">Refresh from Google Sheet</button></section>
+<section class="panel"><h2>Home inventory — test</h2><table id="stock"></table></section><section class="panel"><h2>Recent test records</h2><div id="recent"></div><button class="full" onclick="refresh()">Refresh from Google Sheet</button><button class="full" style="background:#884d32" onclick="resetAll()">Reset all TEST entries</button></section>
 </main><script>
 let data=null,working=false;const e=id=>document.getElementById(id), person=()=>e('person').value;
-function invoke(name,args){if(working)return;working=true;e('status').textContent='Saving…';google.script.run.withSuccessHandler(r=>{working=false;data=r.state||r;draw();e('status').textContent='Connected • latest data loaded';if(r.ok)alert('Saved to TEST Google Sheet')}).withFailureHandler(err=>{working=false;e('status').textContent='Error: '+err.message;alert(err.message)})[name](...args)}
-function refresh(){invoke('getState',[])}
+function invoke(name,args){if(working)return;working=true;e('status').textContent='Saving…';google.script.run.withSuccessHandler(r=>{working=false;data=r.state||r;draw();e('status').textContent='Connected • latest data loaded';if(r.ok)alert('Test entry recorded and synced.')}).withFailureHandler(err=>{working=false;e('status').textContent='Error: '+err.message;alert(err.message)})[name](...args)}
+function refresh(){invoke('getState',[])}\nfunction resetAll(){if(confirm('Clear both TEST event and TEST time tabs? This cannot be undone.'))invoke('resetTestData',[])}
 function uuid(){return 'EV-'+Date.now()+'-'+Math.random().toString(36).slice(2,12)}
 function show(v){['restock','delivery','count','time'].forEach(s=>{e(s).classList.toggle('hide',s!==v);e('b-'+s).classList.toggle('sel',s===v)})}
 function save(type){if(!data)return;let p={id:uuid(),person:person(),clientAt:new Date().toISOString(),note:''};
@@ -92,7 +95,7 @@ invoke('submit',[type,p])}
 function startTimer(){invoke('timeStart',[{id:uuid(),person:person(),activity:e('activity').value}])}
 function stopTimer(){invoke('timeStop',[person()])}
 function draw(){if(!data)return;const h=data.home;const oldSlot=e('slot').value;e('slot').innerHTML=data.slots.map(s=>'<option value="'+s[0]+'">'+s[0]+' — '+s[1]+'</option>').join('');if(data.slots.some(s=>s[0]===oldSlot))e('slot').value=oldSlot;const ps=Object.keys(h);for(let id of ['deliveryproduct','countproduct']){let old=e(id).value;e(id).innerHTML=ps.map(p=>'<option>'+p+'</option>').join('');if(ps.includes(old))e(id).value=old}
-const slot=data.slots.find(s=>s[0]===e('slot').value);e('slotinfo').textContent=slot[1]+' • machine: '+data.machine[slot[0]]+' • home: '+h[slot[1]];
+const slot=data.slots.find(s=>s[0]===e('slot').value);e('final').value=String(data.machine[slot[0]]);e('slotinfo').textContent=slot[1]+' • machine: '+data.machine[slot[0]]+' • home: '+h[slot[1]];
 e('countqty').value=h[e('countproduct').value];e('stock').innerHTML=ps.map(p=>'<tr><td>'+p+'</td><td>'+h[p]+'</td></tr>').join('');
 e('recent').textContent='';data.history.forEach(r=>{let p=document.createElement('p');p.textContent=r.date+' • '+r.type+' • '+r.desc;e('recent').appendChild(p)});
 const open=data.time.find(t=>t.person===person()&&!t.end);e('timedesc').textContent=open?'Running: '+open.activity+' since '+open.start:'No active activity';}
